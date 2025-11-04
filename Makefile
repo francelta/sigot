@@ -2,7 +2,7 @@
 # ConnecMaq - Makefile
 # ============================================
 
-.PHONY: help setup install run migrate test clean superuser testdata shell
+.PHONY: help setup install run migrate test clean superuser testdata shell setup-builder builder-docs builder-install-deps
 
 # Variables
 PYTHON := python3
@@ -119,6 +119,25 @@ collectstatic: ## Recolectar archivos estáticos
 showmigrations: ## Mostrar estado de migraciones
 	@echo "$(BLUE)[MIGRATIONS]$(NC) Estado de migraciones:"
 	@$(ACTIVATE) && $(MANAGE) showmigrations
+
+# ============================================
+# Builder.io Integration
+# ============================================
+
+setup-builder: ## Setup de Builder.io (Visual Headless CMS)
+	@echo "$(BLUE)[BUILDER.IO]$(NC) Configurando Builder.io..."
+	@chmod +x setup-builder.sh
+	@./setup-builder.sh
+	@echo "$(GREEN)✓ Builder.io configurado$(NC)"
+
+builder-docs: ## Ver documentación de Builder.io
+	@echo "$(BLUE)[BUILDER.IO]$(NC) Abriendo documentación..."
+	@cat builder-config/README.md
+
+builder-install-deps: ## Instalar dependencias Python para Builder.io
+	@echo "$(BLUE)[BUILDER.IO]$(NC) Instalando dependencias..."
+	@$(ACTIVATE) && cd backend && $(PIP) install requests
+	@echo "$(GREEN)✓ Dependencias instaladas$(NC)"
 
 # ============================================
 # Git y Deployment
