@@ -2,7 +2,7 @@
 # ConnecMaq - Makefile
 # ============================================
 
-.PHONY: help setup install run migrate test clean superuser testdata shell setup-builder builder-docs builder-install-deps
+.PHONY: help setup install run migrate test clean superuser testdata shell setup-builder builder-docs builder-install-deps builder-dev builder-status builder-check builder-test
 
 # Variables
 PYTHON := python3
@@ -138,6 +138,22 @@ builder-install-deps: ## Instalar dependencias Python para Builder.io
 	@echo "$(BLUE)[BUILDER.IO]$(NC) Instalando dependencias..."
 	@$(ACTIVATE) && cd backend && $(PIP) install requests
 	@echo "$(GREEN)✓ Dependencias instaladas$(NC)"
+
+builder-dev: ## Abrir herramientas de desarrollo de Builder.io
+	@chmod +x dev-builder.sh
+	@./dev-builder.sh
+
+builder-status: ## Ver estado de configuración de Builder.io
+	@chmod +x dev-builder.sh
+	@./dev-builder.sh status
+
+builder-check: ## Verificar API keys y conectividad
+	@chmod +x dev-builder.sh
+	@./dev-builder.sh check
+
+builder-test: ## Test de integración con Builder.io
+	@chmod +x dev-builder.sh
+	@./dev-builder.sh test
 
 # ============================================
 # Git y Deployment
