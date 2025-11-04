@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.venv
+venv/
+ENV/
+env/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Frontend (ignorar por ahora)
+frontend/
+node_modules/
+dist/
+.cache/
+
+# Documentación local (mantener los .md en root)
+# pero ignorar node_modules si hay
+
+# Archivos temporales
+*.tmp
+*.bak
+*.orig
