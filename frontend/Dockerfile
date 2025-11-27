@@ -25,18 +25,20 @@ FROM nginx:alpine
 RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy custom nginx config template
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+COPY nginx.conf /tmp/default.conf.template
 
 # Copy built Vue app
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Default environment variables
-ENV PORT=80
-ENV BACKEND_URL=http://backend:8000
+# Create startup script
+RUN echo '#!/bin/sh' > /start.sh && \
+    echo 'export PORT=${PORT:-80}' >> /start.sh && \
+    echo 'export BACKEND_URL=${BACKEND_URL:-http://backend:8000}' >> /start.sh && \
+    echo 'envsubst "\$PORT \$BACKEND_URL" < /tmp/default.conf.template > /etc/nginx/conf.d/default.conf' >> /start.sh && \
+    echo 'echo "Starting nginx on port $PORT"' >> /start.sh && \
+    echo 'cat /etc/nginx/conf.d/default.conf' >> /start.sh && \
+    echo 'nginx -g "daemon off;"' >> /start.sh && \
+    chmod +x /start.sh
 
-# Expose port (Railway will override with $PORT)
-EXPOSE ${PORT}
-
-# Use shell to substitute env vars and start nginx
-CMD ["/bin/sh", "-c", "envsubst '$PORT $BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["/start.sh"]
 
