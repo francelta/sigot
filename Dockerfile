@@ -31,6 +31,6 @@ RUN python manage.py collectstatic --noinput || true
 # Puerto por defecto
 EXPOSE 8000
 
-# Comando de arranque (Daphne para ASGI/Channels)
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "sigot.boot.asgi:application"]
+# Comando de arranque: migrar y luego iniciar Daphne
+CMD ["sh", "-c", "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p 8000 sigot.boot.asgi:application"]
 
