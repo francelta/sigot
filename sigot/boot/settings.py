@@ -17,7 +17,9 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-producti
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# ALLOWED_HOSTS: soporta wildcards para PaaS (Railway, Render)
+_default_hosts = 'localhost,127.0.0.1,.railway.app,.onrender.com,sigot-production.up.railway.app'
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', _default_hosts).split(',') if h.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -42,6 +44,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Servir archivos estáticos en producción
     'corsheaders.middleware.CorsMiddleware',  # CORS debe estar antes de CommonMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -74,16 +77,30 @@ WSGI_APPLICATION = 'sigot.boot.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/stable/ref/settings/#databases
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': os.environ.get('DB_NAME', 'sigot'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
+# Soporte para DATABASE_URL (Railway, Render, Heroku) o variables individuales
+import dj_database_url
+
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            engine='django.contrib.gis.db.backends.postgis',
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.contrib.gis.db.backends.postgis',
+            'NAME': os.environ.get('DB_NAME', 'sigot'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators
@@ -168,9 +185,18 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+# Añadir orígenes desde variable de entorno (para producción)
+CORS_EXTRA_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '')
+if CORS_EXTRA_ORIGINS:
+    CORS_ALLOWED_ORIGINS.extend([o.strip() for o in CORS_EXTRA_ORIGINS.split(',') if o.strip()])
+
 CORS_ALLOW_CREDENTIALS = True
 
 # En desarrollo, permitir todos los orígenes (cambiar en producción)
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+
+# CSRF trusted origins para PaaS
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in CSRF_TRUSTED_ORIGINS if o.strip()]
 
