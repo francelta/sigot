@@ -15,7 +15,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+# DEBUG es False por defecto en producción (Railway establece RAILWAY_ENVIRONMENT)
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # ALLOWED_HOSTS: soporta wildcards para PaaS (Railway, Render)
 _default_hosts = 'localhost,127.0.0.1,.railway.app,.onrender.com,sigot-production.up.railway.app'
