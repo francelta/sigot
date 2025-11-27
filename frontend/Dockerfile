@@ -40,6 +40,4 @@ RUN echo '#!/bin/sh' > /start.sh && \
     echo 'nginx -g "daemon off;"' >> /start.sh && \
     chmod +x /start.sh
 
-CMD ["/start.sh"]
-
-# Force rebuild Thu Nov 27 10:28:28 CET 2025
+ENTRYPOINT ["/bin/sh", "/start.sh"]
