@@ -25,7 +25,7 @@ FROM nginx:alpine
 RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy custom nginx config template
-COPY nginx.conf /etc/nginx/nginx.conf.template
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 # Copy built Vue app
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -34,9 +34,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 ENV PORT=80
 ENV BACKEND_URL=http://backend:8000
 
-# Expose port
-EXPOSE 80
+# Expose port (Railway will override with $PORT)
+EXPOSE ${PORT}
 
-# Use envsubst to replace env vars and start nginx
-CMD ["/bin/sh", "-c", "envsubst '${PORT} ${BACKEND_URL}' < /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+# Use shell to substitute env vars and start nginx
+CMD ["/bin/sh", "-c", "envsubst '$PORT $BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
 
