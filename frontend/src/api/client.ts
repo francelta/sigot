@@ -4,11 +4,21 @@ import axios, {
 } from 'axios'
 
 /**
+ * Determine the API base URL:
+ * - Production: Uses VITE_API_URL environment variable
+ * - Development: Falls back to localhost
+ */
+const getBaseURL = (): string => {
+  const envUrl = import.meta.env.VITE_API_URL
+  return envUrl || 'http://localhost:8000/api'
+}
+
+/**
  * Centralized Axios client for API requests
  * Configured with base URL and interceptors for authentication
  */
 const client: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },
