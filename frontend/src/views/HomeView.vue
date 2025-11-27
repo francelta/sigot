@@ -1,5 +1,9 @@
 <template>
-  <div class="p-4 max-w-6xl mx-auto">
+  <!-- Transportista Dashboard -->
+  <TransportistaDashboard v-if="esTransportista" />
+
+  <!-- Client Home -->
+  <div v-else class="p-4 max-w-6xl mx-auto">
     <div class="mb-8 text-center">
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         ¿Qué necesitas transportar?
@@ -63,13 +67,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/authStore'
 import { fetchCategorias } from '../api/transportistas'
 import type { Categoria } from '../api/transportistas'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseSpinner from '../components/base/BaseSpinner.vue'
 import BaseEmptyState from '../components/base/BaseEmptyState.vue'
+import TransportistaDashboard from './TransportistaDashboard.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
+const esTransportista = computed(() => authStore.esTransportista)
 
 const categorias = ref<Categoria[]>([])
 const isLoading = ref(false)
