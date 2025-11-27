@@ -79,19 +79,23 @@ WSGI_APPLICATION = 'sigot.boot.wsgi.application'
 import dj_database_url
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
+# Use PostGIS locally, PostgreSQL in production (Railway doesn't have PostGIS)
+USE_POSTGIS = os.environ.get('USE_POSTGIS', 'true').lower() == 'true'
+DB_ENGINE = 'django.contrib.gis.db.backends.postgis' if USE_POSTGIS else 'django.db.backends.postgresql'
+
 if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
-            engine='django.contrib.gis.db.backends.postgis',
+            engine=DB_ENGINE,
         )
     }
 else:
     DATABASES = {
         'default': {
-            'ENGINE': 'django.contrib.gis.db.backends.postgis',
+            'ENGINE': DB_ENGINE,
             'NAME': os.environ.get('DB_NAME', 'sigot'),
             'USER': os.environ.get('DB_USER', 'postgres'),
             'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
