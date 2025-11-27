@@ -6,10 +6,8 @@ Implementa TransportistaRepositoryPort usando el ORM de Django/GeoDjango
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
+import math
 
-from django.contrib.gis.geos import Point as GeoPoint
-from django.contrib.gis.measure import D
-from django.contrib.gis.db.models.functions import Distance
 from django.db.models import Q
 from django.utils import timezone
 from geopy.geocoders import Nominatim
@@ -23,6 +21,23 @@ from sigot.core.ports import (
 from sigot.infrastructure.db.models import Transportista, User
 
 logger = logging.getLogger(__name__)
+
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calcula la distancia en kilómetros entre dos puntos usando la fórmula de Haversine.
+    """
+    R = 6371  # Radio de la Tierra en km
+    
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+    
+    a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    
+    return R * c
 
 
 class TransportistaRepositoryORM(TransportistaRepositoryPort):
@@ -55,7 +70,7 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
         except Transportista.DoesNotExist:
             return None
 
-    def _geocodificar_consulta(self, query_location_str: str) -> Optional[GeoPoint]:
+    def _geocodificar_consulta(self, query_location_str: str) -> Optional[Point]:
         """
         Geocodifica una consulta de búsqueda (ej: "Madrid", "CP: 28001") en un Point.
         Retorna None si no se puede geocodificar.
@@ -68,7 +83,7 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
                 query = f"{query}, España"
             location = geolocator.geocode(query, timeout=10)
             if location:
-                return GeoPoint(location.longitude, location.latitude, srid=4326)
+                return Point(latitude=location.latitude, longitude=location.longitude)
             return None
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             logger.error(f"Error geocodificando '{query_location_str}': {e}")
@@ -118,24 +133,7 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
             'categorias', 'transportistacategoria_set', 'transportistacategoria_set__categoria'
         )
 
-        # Filtro por zona de actuación
-        from django.contrib.gis.db.models.functions import Distance
-        
         resultados = []
-        
-        # Caso 1: Transportistas con RADIO
-        radio_filter = Q(
-            tipo_zona_actuacion='RADIO',
-            base_geocodificada__isnull=False,
-        ) & (
-            Q(radio_km_general__isnull=False) | 
-            Q(transportistacategoria_set__radio_km_especifico__isnull=False)
-        )
-        queryset_radio = queryset.filter(radio_filter).annotate(
-            distance=Distance('base_geocodificada', cliente_point)
-        ).distinct()
-        
-        logger.info(f"Transportistas después del filtro RADIO: {queryset_radio.count()}")
         
         # Si hay filtro por categoría, obtener todas las categorías descendientes una sola vez
         categoria_ids_validas = None
@@ -144,65 +142,64 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
             categoria_buscada = Categoria.objects.filter(id=category_id).prefetch_related('children').first()
             
             if categoria_buscada:
-                # Obtener todas las categorías descendientes (hijas, nietas, etc.)
                 def get_all_descendants(cat):
-                    """Obtiene todas las categorías descendientes recursivamente"""
                     descendants = [cat.id]
-                    # Precargar hijos para evitar consultas N+1
                     children = list(cat.children.all())
                     for child in children:
                         descendants.extend(get_all_descendants(child))
                     return descendants
                 
                 categoria_ids_validas = set(get_all_descendants(categoria_buscada))
-                logger.info(f"Categorías válidas para búsqueda (incluyendo descendientes): {categoria_ids_validas}")
+                logger.info(f"Categorías válidas para búsqueda: {categoria_ids_validas}")
         
-        # Filtrar en Python (simplificado para MVP)
-        # En producción, usar Func() o extra() para hacer esto en SQL
+        # Caso 1: Transportistas con RADIO
+        radio_filter = Q(
+            tipo_zona_actuacion='RADIO',
+            base_latitud__isnull=False,
+            base_longitud__isnull=False,
+        ) & (
+            Q(radio_km_general__isnull=False) | 
+            Q(transportistacategoria_set__radio_km_especifico__isnull=False)
+        )
+        queryset_radio = queryset.filter(radio_filter).distinct()
+        
+        logger.info(f"Transportistas después del filtro RADIO: {queryset_radio.count()}")
+        
+        # Filtrar en Python usando Haversine
         for transportista in queryset_radio:
-            # Si hay filtro por categoría, verificar si el transportista tiene esa categoría o alguna hija
+            # Calcular distancia usando Haversine
+            distancia_km = haversine_distance(
+                cliente_point.latitude, cliente_point.longitude,
+                transportista.base_latitud, transportista.base_longitud
+            )
+            transportista._distancia_km = distancia_km  # Guardar para uso posterior
+            
+            # Si hay filtro por categoría, verificar si el transportista tiene esa categoría
             if category_id and categoria_ids_validas is not None:
-                # Obtener todas las categorías del transportista (ya precargadas con prefetch_related)
                 categorias_transportista = list(transportista.transportistacategoria_set.all())
-                categoria_ids_transportista = [tc.categoria.id for tc in categorias_transportista]
-                logger.debug(f"Transportista {transportista.user.username} tiene categorías: {categoria_ids_transportista}")
                 
-                # Verificar si tiene la categoría directamente o alguna categoría hija
                 tiene_categoria = False
                 transportista_categoria_match = None
                 
-                # Buscar si alguna categoría del transportista está en la lista de válidas
                 for tc in categorias_transportista:
                     if tc.categoria.id in categoria_ids_validas:
                         tiene_categoria = True
                         transportista_categoria_match = tc
-                        logger.debug(f"  ✅ Coincidencia encontrada: categoría {tc.categoria.id} ({tc.categoria.nombre})")
                         break
                 
                 if not tiene_categoria:
-                    # El transportista no tiene esta categoría ni ninguna hija, saltarlo
-                    logger.debug(f"  ❌ No tiene ninguna categoría válida")
                     continue
                 
-                # Si tiene la categoría, usar su radio específico si existe, sino el general
                 radio_efectivo = transportista_categoria_match.radio_km_especifico if transportista_categoria_match else None
                 radio_efectivo = radio_efectivo or transportista.radio_km_general
             else:
-                # Sin filtro de categoría, usar el radio general
                 radio_efectivo = transportista.radio_km_general
             
-            # Si no hay radio efectivo, saltar este transportista
             if not radio_efectivo:
                 continue
             
-            # Verificar si está dentro del radio
-            distancia_km = transportista.distance.km
-            logger.debug(f"Transportista {transportista.user.username}: distancia={distancia_km:.2f} km, radio={radio_efectivo} km")
             if distancia_km <= radio_efectivo:
                 resultados.append(transportista)
-                logger.debug(f"  ✅ Añadido a resultados")
-            else:
-                logger.debug(f"  ❌ Fuera del radio")
 
         # Caso 2: Transportistas con ZONAS
         queryset_zonas = queryset.filter(
@@ -242,16 +239,16 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
         # No necesitamos filtrar de nuevo aquí
 
         # Ordenar por distancia (si aplica) o por ID
-        resultados_con_distancia = [t for t in resultados if hasattr(t, 'distance')]
-        resultados_sin_distancia = [t for t in resultados if not hasattr(t, 'distance')]
+        resultados_con_distancia = [t for t in resultados if hasattr(t, '_distancia_km')]
+        resultados_sin_distancia = [t for t in resultados if not hasattr(t, '_distancia_km')]
         
-        resultados_con_distancia.sort(key=lambda x: x.distance.km)
+        resultados_con_distancia.sort(key=lambda x: x._distancia_km)
         resultados_sin_distancia.sort(key=lambda x: x.user_id)
         
         resultados = resultados_con_distancia + resultados_sin_distancia
 
         return [
-            self._to_dict(transportista, include_distance=hasattr(transportista, 'distance'))
+            self._to_dict(transportista, include_distance=hasattr(transportista, '_distancia_km'))
             for transportista in resultados
         ]
 
@@ -276,26 +273,26 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
         """
         user = User.objects.get(id=transportista_data.user_id)
 
-        geo_ubicacion = None
+        lat = None
+        lon = None
         if transportista_data.ubicacion:
-            geo_ubicacion = GeoPoint(
-                transportista_data.ubicacion.longitude,
-                transportista_data.ubicacion.latitude,
-                srid=4326,
-            )
+            lat = transportista_data.ubicacion.latitude
+            lon = transportista_data.ubicacion.longitude
 
         transportista, created = Transportista.objects.get_or_create(
             user=user,
             defaults={
                 'disponible': transportista_data.disponible,
-                'base_geocodificada': geo_ubicacion,
+                'base_latitud': lat,
+                'base_longitud': lon,
                 'trial_end': transportista_data.trial_end,
             },
         )
 
         if not created:
             transportista.disponible = transportista_data.disponible
-            transportista.base_geocodificada = geo_ubicacion
+            transportista.base_latitud = lat
+            transportista.base_longitud = lon
             transportista.trial_end = transportista_data.trial_end
             transportista.save()
 
@@ -318,8 +315,8 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
         """Actualiza la ubicación de un transportista."""
         try:
             transportista = Transportista.objects.get(user_id=user_id)
-            geo_point = GeoPoint(point.longitude, point.latitude, srid=4326)
-            transportista.base_geocodificada = geo_point
+            transportista.base_latitud = point.latitude
+            transportista.base_longitud = point.longitude
             transportista.save()
             return True
         except Transportista.DoesNotExist:
@@ -359,7 +356,8 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
             'id': user.id,
             'user_id': user.id,
             'disponible': False,
-            'base_geocodificada': None,
+            'base_latitud': None,
+            'base_longitud': None,
             'trial_end': None,
             'categoria_ids': [],
             'categorias': [],
@@ -373,19 +371,15 @@ class TransportistaRepositoryORM(TransportistaRepositoryPort):
     ) -> Dict[str, Any]:
         """Convierte un modelo Transportista a un diccionario."""
         base_geocodificada_dict = None
-        if transportista.base_geocodificada:
+        if transportista.base_latitud and transportista.base_longitud:
             base_geocodificada_dict = {
-                'lat': transportista.base_geocodificada.y,
-                'lon': transportista.base_geocodificada.x,
+                'lat': transportista.base_latitud,
+                'lon': transportista.base_longitud,
             }
 
         distancia_km: Optional[float] = None
-        if include_distance and hasattr(transportista, 'distance') and transportista.distance is not None:
-            try:
-                distancia_km = round(transportista.distance.km, 3)
-            except AttributeError:
-                # Algunas bases de datos devuelven la distancia en metros
-                distancia_km = round(float(transportista.distance) / 1000.0, 3)
+        if include_distance and hasattr(transportista, '_distancia_km') and transportista._distancia_km is not None:
+            distancia_km = round(transportista._distancia_km, 3)
 
         categorias = [
             {

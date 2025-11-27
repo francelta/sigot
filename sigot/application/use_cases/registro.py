@@ -106,7 +106,8 @@ class RegistrarTransportista:
                 'id': 1,
                 'user_id': 1,
                 'disponible': False,
-                'base_geocodificada': None,
+                'base_latitud': None,
+                'base_longitud': None,
                 'trial_end': None,
                 'categoria_ids': [],
             }

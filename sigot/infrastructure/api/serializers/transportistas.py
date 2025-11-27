@@ -135,19 +135,19 @@ class TransportistaListSerializer(serializers.Serializer):
         }
 
         # Añadir base_geocodificada si existe
-        if instance.base_geocodificada:
+        if instance.base_latitud and instance.base_longitud:
             data['base_geocodificada'] = {
-                'lat': instance.base_geocodificada.y,
-                'lon': instance.base_geocodificada.x
+                'lat': instance.base_latitud,
+                'lon': instance.base_longitud
             }
         else:
             data['base_geocodificada'] = None
 
         # Añadir ubicacion (alias de base_geocodificada) para compatibilidad
-        if instance.base_geocodificada:
+        if instance.base_latitud and instance.base_longitud:
             data['ubicacion'] = {
-                'lat': instance.base_geocodificada.y,
-                'lon': instance.base_geocodificada.x
+                'lat': instance.base_latitud,
+                'lon': instance.base_longitud
             }
         else:
             data['ubicacion'] = None

@@ -5,7 +5,6 @@ Vista para el proceso de onboarding transaccional de transportistas
 import json
 import logging
 
-from django.contrib.gis.geos import Point as GeoPoint
 from django.db import transaction
 from geopy.exc import GeocoderServiceError, GeocoderTimedOut
 from geopy.geocoders import Nominatim
@@ -38,9 +37,9 @@ class OnboardingCompleteView(APIView):
 
     permission_classes = [IsAuthenticated, IsTransportista]
 
-    def _geocode_postal_code(self, codigo_postal: str) -> GeoPoint | None:
+    def _geocode_postal_code(self, codigo_postal: str) -> tuple[float, float] | None:
         """
-        Geocodifica un código postal español y retorna un GeoPoint (lon, lat).
+        Geocodifica un código postal español y retorna (latitud, longitud).
         Usa Nominatim (OpenStreetMap) para geocodificar.
         """
         try:
@@ -50,8 +49,8 @@ class OnboardingCompleteView(APIView):
             location = geolocator.geocode(query, timeout=10)
             
             if location:
-                # GeoPoint usa (longitude, latitude) no (latitude, longitude)
-                return GeoPoint(location.longitude, location.latitude, srid=4326)
+                # Retorna (latitud, longitud)
+                return (location.latitude, location.longitude)
             return None
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             logger.error(f"Error geocodificando código postal '{codigo_postal}': {e}")
@@ -185,10 +184,12 @@ class OnboardingCompleteView(APIView):
 
         # 1. Geocodificar código postal y actualizar Transportista
         codigo_postal = validated_data['codigo_postal']
-        base_geocodificada = self._geocode_postal_code(codigo_postal)
+        coords = self._geocode_postal_code(codigo_postal)
         
         transportista.codigo_postal = codigo_postal
-        transportista.base_geocodificada = base_geocodificada
+        if coords:
+            transportista.base_latitud = coords[0]
+            transportista.base_longitud = coords[1]
         transportista.radio_km_general = validated_data.get('radio_km_general')
         transportista.tipo_zona_actuacion = 'RADIO'  # Siempre RADIO en v3.0
         
