@@ -7,7 +7,7 @@ Estos modelos residen en la capa de Infrastructure porque dependen de Django/Geo
 """
 
 from django.contrib.auth.models import AbstractUser
-from django.contrib.gis.db import models
+from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 
@@ -98,11 +98,16 @@ class Transportista(models.Model):
         null=True,
         help_text='Código postal para geocodificar la base de actuación'
     )
-    base_geocodificada = models.PointField(
-        srid=4326,  # WGS84 - estándar para GPS
+    # Coordenadas geocodificadas (usando FloatField en lugar de PointField para compatibilidad con PostgreSQL sin PostGIS)
+    base_latitud = models.FloatField(
         null=True,
         blank=True,
-        help_text='Coordenadas geocodificadas calculadas desde codigo_postal (latitud, longitud)'
+        help_text='Latitud geocodificada desde codigo_postal'
+    )
+    base_longitud = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='Longitud geocodificada desde codigo_postal'
     )
     tipo_zona_actuacion = models.CharField(
         max_length=10,
@@ -169,7 +174,7 @@ class Transportista(models.Model):
             return False
         
         if self.tipo_zona_actuacion == 'RADIO':
-            return self.base_geocodificada is not None and (self.radio_km_general is not None or self.transportistacategoria_set.exists())
+            return self.base_latitud is not None and self.base_longitud is not None and (self.radio_km_general is not None or self.transportistacategoria_set.exists())
         elif self.tipo_zona_actuacion == 'ZONAS':
             return self.zonas_definidas is not None
         
