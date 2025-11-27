@@ -42,3 +42,4 @@ RUN echo '#!/bin/sh' > /start.sh && \
 
 CMD ["/start.sh"]
 
+# Force rebuild Thu Nov 27 10:28:28 CET 2025
