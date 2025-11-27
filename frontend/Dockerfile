@@ -25,7 +25,7 @@ FROM nginx:alpine
 RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy custom nginx config template
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+COPY nginx.conf /etc/nginx/nginx.conf.template
 
 # Copy built Vue app
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -37,6 +37,6 @@ ENV BACKEND_URL=http://backend:8000
 # Expose port
 EXPOSE 80
 
-# Nginx will use envsubst to replace env vars in config
-CMD ["nginx", "-g", "daemon off;"]
+# Use envsubst to replace env vars and start nginx
+CMD ["/bin/sh", "-c", "envsubst '${PORT} ${BACKEND_URL}' < /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
 
