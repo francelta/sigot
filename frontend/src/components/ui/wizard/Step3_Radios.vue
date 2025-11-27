@@ -54,7 +54,7 @@
           
           <!-- Nombre del Vehículo -->
           <BaseInput
-            v-model="localData.maquinaria_detalles[categoria.id]?.nombre_vehiculo"
+            v-model="localData.maquinaria_detalles[categoria.id].nombre_vehiculo"
             label="Nombre del vehículo"
             type="text"
             placeholder="Ej: Mi Furgoneta Mercedes"
@@ -63,7 +63,7 @@
           
           <!-- Marca -->
           <BaseInput
-            v-model="localData.maquinaria_detalles[categoria.id]?.marca"
+            v-model="localData.maquinaria_detalles[categoria.id].marca"
             label="Marca"
             type="text"
             placeholder="Ej: Mercedes, Volvo, Caterpillar"
@@ -72,7 +72,7 @@
           
           <!-- Tonelaje -->
           <BaseInput
-            v-model.number="localData.maquinaria_detalles[categoria.id]?.tonelaje"
+            v-model.number="localData.maquinaria_detalles[categoria.id].tonelaje"
             label="Tonelaje"
             type="number"
             placeholder="Ej: 3.5, 7.5, 20"
@@ -88,7 +88,7 @@
             Características
           </label>
           <textarea
-            v-model="localData.maquinaria_detalles[categoria.id]?.caracteristicas"
+            v-model="localData.maquinaria_detalles[categoria.id].caracteristicas"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             rows="3"
             placeholder="Descripción detallada de características especiales..."
