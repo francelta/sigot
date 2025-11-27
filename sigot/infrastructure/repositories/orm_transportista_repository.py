@@ -1,8 +1,13 @@
 """
 Repositorio ORM para Transportistas
 Implementa TransportistaRepositoryPort usando el ORM de Django/GeoDjango
+
+Configuración:
+- USE_POSTGIS=true (default): Usa PostGIS con consultas geoespaciales nativas
+- USE_POSTGIS=false: Usa Haversine para cálculo de distancias (Railway)
 """
 
+import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
@@ -19,6 +24,13 @@ from sigot.core.ports import (
     Point,
 )
 from sigot.infrastructure.db.models import Transportista, User
+
+# Detectar si usar PostGIS o PostgreSQL estándar
+USE_POSTGIS = os.environ.get('USE_POSTGIS', 'true').lower() == 'true'
+
+if USE_POSTGIS:
+    from django.contrib.gis.geos import Point as GeoPoint
+    from django.contrib.gis.db.models.functions import Distance
 
 logger = logging.getLogger(__name__)
 

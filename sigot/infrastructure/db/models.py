@@ -4,12 +4,24 @@ Adaptador de Base de Datos - Contrato de Datos del ORM
 
 Este archivo define los modelos de Django que representan el dominio del negocio.
 Estos modelos residen en la capa de Infrastructure porque dependen de Django/GeoDjango.
+
+Configuración:
+- USE_POSTGIS=true (default): Usa PostGIS con PointField para geolocalización
+- USE_POSTGIS=false: Usa FloatField para compatibilidad con PostgreSQL sin PostGIS (Railway)
 """
 
+import os
 from django.contrib.auth.models import AbstractUser
-from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+
+# Detectar si usar PostGIS o PostgreSQL estándar
+USE_POSTGIS = os.environ.get('USE_POSTGIS', 'true').lower() == 'true'
+
+if USE_POSTGIS:
+    from django.contrib.gis.db import models
+else:
+    from django.db import models
 
 
 class User(AbstractUser):
