@@ -1,0 +1,679 @@
+openapi: 3.0.3
+info:
+  title: SIGOT API
+  description: |
+    API REST para el Sistema de Gestión de Operadores de Transporte (SIGOT).
+    
+    Esta API permite gestionar transportistas, categorías, valoraciones y chat en tiempo real.
+    
+    **Autenticación:** Todos los endpoints (excepto registro y login) requieren un token JWT en el header `Authorization: Bearer <token>`.
+  version: 1.0.0
+  contact:
+    name: SIGOT Team
+    email: support@sigot.com
+
+servers:
+  - url: http://localhost:8000/api
+    description: Servidor de desarrollo
+  - url: https://api.sigot.com/api
+    description: Servidor de producción
+
+tags:
+  - name: auth
+    description: Autenticación y registro de usuarios
+  - name: transportistas
+    description: Gestión de transportistas y búsquedas geoespaciales
+  - name: categorias
+    description: Gestión de categorías de transporte
+  - name: valoraciones
+    description: Sistema de valoraciones entre usuarios
+  - name: chat
+    description: Gestión de salas de chat y mensajes
+
+paths:
+  # ========================================================================
+  # AUTENTICACIÓN
+  # ========================================================================
+  /auth/register/:
+    post:
+      tags:
+        - auth
+      summary: Registro de nuevo usuario
+      description: Crea una nueva cuenta de usuario. Si el usuario se registra como transportista, se le asigna automáticamente un período de prueba de 3 meses.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: El email o username ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login/:
+    post:
+      tags:
+        - auth
+      summary: Inicio de sesión
+      description: Autentica un usuario y retorna un token JWT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Autenticación exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ========================================================================
+  # TRANSPORTISTAS
+  # ========================================================================
+  /transportistas/cercanos/:
+    get:
+      tags:
+        - transportistas
+      summary: Buscar transportistas por zona de actuación
+      description: |
+        Busca transportistas disponibles según su zona de actuación (radio o zonas definidas).
+        El sistema geocodifica la consulta del usuario y busca transportistas cuya zona de actuación incluya esa ubicación.
+        Utiliza PostGIS para consultas geoespaciales eficientes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: |
+            Consulta de búsqueda: puede ser una ciudad (ej: "Madrid"), código postal (ej: "CP: 28001"),
+            o cualquier dirección que pueda ser geocodificada.
+          example: "Madrid"
+        - name: categoria
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: ID de categoría para filtrar
+          example: 1
+      responses:
+        '200':
+          description: Lista de transportistas encontrados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Transportista'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /transportistas/mi-estado/:
+    patch:
+      tags:
+        - transportistas
+      summary: Actualizar mi estado de disponibilidad
+      description: |
+        Actualiza el estado de disponibilidad del transportista autenticado.
+        Requiere que el período de prueba esté activo y que tenga una zona de actuación configurada.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - disponible
+              properties:
+                disponible:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Estado actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  disponible:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: |
+            El período de prueba ha caducado o no tiene zona de actuación configurada.
+            Código de error: `TRIAL_EXPIRED` o `NO_ZONE_CONFIGURED`
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ========================================================================
+  # CATEGORÍAS
+  # ========================================================================
+  /categorias/:
+    get:
+      tags:
+        - categorias
+      summary: Obtener todas las categorías
+      description: |
+        Retorna todas las categorías con su estructura jerárquica (árbol de subcategorías).
+        Este endpoint es público y no requiere autenticación, ya que las categorías son
+        datos de referencia que cualquier usuario debe poder ver.
+      responses:
+        '200':
+          description: Lista de categorías con estructura jerárquica
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Categoria'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ========================================================================
+  # VALORACIONES
+  # ========================================================================
+  /valoraciones/:
+    post:
+      tags:
+        - valoraciones
+      summary: Crear una valoración
+      description: |
+        Crea una nueva valoración de un usuario a otro.
+        Un usuario no puede valorarse a sí mismo.
+        Un usuario solo puede valorar a otro una vez (unique constraint).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValoracionRequest'
+      responses:
+        '201':
+          description: Valoración creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Valoracion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: |
+            Error de validación. Posibles códigos:
+            - `SELF_RATING`: Intento de valorarse a sí mismo
+            - `ALREADY_RATED`: Ya existe una valoración para este usuario
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    get:
+      tags:
+        - valoraciones
+      summary: Obtener valoraciones de un usuario
+      description: Retorna todas las valoraciones recibidas por un usuario específico.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: ID del usuario del cual obtener las valoraciones
+      responses:
+        '200':
+          description: Lista de valoraciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Valoracion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ========================================================================
+  # CHAT
+  # ========================================================================
+  /chat/rooms/:
+    get:
+      tags:
+        - chat
+      summary: Obtener mis salas de chat
+      description: Retorna todas las salas de chat del usuario autenticado.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de salas de chat
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatRoom'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - chat
+      summary: Crear una nueva sala de chat
+      description: Crea una nueva sala de chat con los participantes especificados.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - participant_ids
+              properties:
+                participant_ids:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+                  description: Lista de IDs de usuarios participantes (incluyendo al usuario autenticado)
+      responses:
+        '201':
+          description: Sala de chat creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatRoom'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /chat/rooms/{id}/messages/:
+    get:
+      tags:
+        - chat
+      summary: Obtener mensajes de una sala
+      description: Retorna los mensajes de una sala de chat con paginación.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID de la sala de chat
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+          description: Número máximo de mensajes a retornar
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Número de mensajes a saltar (para paginación)
+      responses:
+        '200':
+          description: Lista de mensajes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  next:
+                    type: string
+                    nullable: true
+                  previous:
+                    type: string
+                    nullable: true
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: El usuario no es participante de esta sala
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido del endpoint /auth/login/
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+        - is_transportista
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 150
+          example: "juan_perez"
+        email:
+          type: string
+          format: email
+          example: "juan@example.com"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: "password123"
+        phone:
+          type: string
+          nullable: true
+          example: "+34612345678"
+        is_transportista:
+          type: boolean
+          description: Si es true, se crea un perfil de transportista con período de prueba de 3 meses
+          example: true
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "juan_perez"
+        password:
+          type: string
+          format: password
+          example: "password123"
+
+    AuthResponse:
+      type: object
+      properties:
+        access:
+          type: string
+          description: Token JWT de acceso
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refresh:
+          type: string
+          description: Token JWT de refresco (opcional)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        is_transportista:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Transportista:
+      type: object
+      properties:
+        id:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+        disponible:
+          type: boolean
+        direccion_empresarial:
+          type: string
+          nullable: true
+          description: Dirección base de la empresa del transportista
+        base_geocodificada:
+          type: object
+          properties:
+            lat:
+              type: number
+              format: float
+            lon:
+              type: number
+              format: float
+          nullable: true
+          description: Coordenadas geocodificadas de la dirección empresarial
+        tipo_zona_actuacion:
+          type: string
+          enum: [RADIO, ZONAS]
+          description: Tipo de zona de actuación
+        radio_km:
+          type: integer
+          nullable: true
+          description: Radio de actuación en kilómetros (solo si tipo_zona_actuacion == RADIO)
+        zonas_definidas:
+          type: object
+          nullable: true
+          description: Zonas definidas manualmente (solo si tipo_zona_actuacion == ZONAS). Ej: {"provincias": ["Madrid", "Barcelona"], "nacional": true}
+        trial_end:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de finalización del período de prueba
+        categorias:
+          type: array
+          items:
+            $ref: '#/components/schemas/Categoria'
+
+    Categoria:
+      type: object
+      properties:
+        id:
+          type: integer
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        parent:
+          type: integer
+          nullable: true
+          description: ID de la categoría padre (null para categorías raíz)
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Categoria'
+          description: Subcategorías (solo en /categorias/)
+
+    ValoracionRequest:
+      type: object
+      required:
+        - rated_user_id
+        - rating
+      properties:
+        rated_user_id:
+          type: integer
+          description: ID del usuario que recibe la valoración
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Calificación de 1 a 5 estrellas
+        comment:
+          type: string
+          nullable: true
+          maxLength: 1000
+
+    Valoracion:
+      type: object
+      properties:
+        id:
+          type: integer
+        author:
+          $ref: '#/components/schemas/User'
+        rated_user:
+          $ref: '#/components/schemas/User'
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ChatRoom:
+      type: object
+      properties:
+        id:
+          type: integer
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        is_favorite:
+          type: boolean
+          description: Si el usuario autenticado ha marcado esta sala como favorita
+        is_muted:
+          type: boolean
+          description: Si el usuario autenticado ha silenciado esta sala
+        last_message:
+          $ref: '#/components/schemas/Message'
+          nullable: true
+          description: Último mensaje de la sala (solo en /chat/rooms/)
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        chatroom_id:
+          type: integer
+        author:
+          $ref: '#/components/schemas/User'
+        body:
+          type: string
+        attachment:
+          type: string
+          format: uri
+          nullable: true
+          description: URL del archivo adjunto
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Código de error
+        message:
+          type: string
+          description: Mensaje de error descriptivo
+        details:
+          type: object
+          nullable: true
+          description: Detalles adicionales del error
+
+  responses:
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "VALIDATION_ERROR"
+            message: "Los datos proporcionados no son válidos"
+            details:
+              field: ["Este campo es requerido"]
+
+    Unauthorized:
+      description: No autenticado o token inválido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "UNAUTHORIZED"
+            message: "Token de autenticación inválido o expirado"
+
+    Forbidden:
+      description: No tiene permisos para realizar esta acción
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "FORBIDDEN"
+            message: "No tiene permisos para realizar esta acción"
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "NOT_FOUND"
+            message: "El recurso solicitado no existe"
+

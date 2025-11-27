@@ -1,0 +1,94 @@
+/* Leaflet CSS - debe ir antes de @tailwind */
+@import 'leaflet/dist/leaflet.css';
+
+/* Saviko Sans Bold Font */
+@font-face {
+  font-family: 'Saviko Sans';
+  src: url('/Saviko.Sans/Saviko Sans Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Tailwind CSS - Primary color: #1a1a1a (casi negro) - FORCED REGEN */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Force primary color override - ELIMINAR TODO AZUL */
+@layer utilities {
+  .bg-primary-500,
+  .bg-primary-600,
+  .bg-primary-700 {
+    background-color: #1a1a1a !important;
+  }
+  .text-primary-500,
+  .text-primary-600,
+  .text-primary-700 {
+    color: #1a1a1a !important;
+  }
+  .border-primary-500,
+  .border-primary-600,
+  .border-primary-700 {
+    border-color: #1a1a1a !important;
+  }
+  .hover\:bg-primary-600:hover {
+    background-color: #171717 !important;
+  }
+  .hover\:bg-primary-50:hover {
+    background-color: #f5f5f5 !important;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200;
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply max-w-md mx-auto px-4 py-6;
+  }
+  
+  /* Estilos para marcadores de transportistas */
+  .transportista-marker {
+    transition: transform 0.2s;
+  }
+  
+  .transportista-marker:hover {
+    transform: scale(1.1);
+  }
+  
+  /* Asegurar que los placeholders sean visibles - FORZADO */
+  input::placeholder,
+  input::-webkit-input-placeholder,
+  input::-moz-placeholder,
+  input:-ms-input-placeholder {
+    color: #9ca3af !important;
+    opacity: 1 !important;
+    -webkit-opacity: 1 !important;
+    -moz-opacity: 1 !important;
+  }
+  
+  /* Específico para el input del chat */
+  input[type="text"]::placeholder,
+  input[type="text"]::-webkit-input-placeholder,
+  input[type="text"]::-moz-placeholder {
+    color: #9ca3af !important;
+    opacity: 1 !important;
+  }
+  
+  /* Clase específica para el input del chat */
+  .chat-input-message::placeholder,
+  .chat-input-message::-webkit-input-placeholder,
+  .chat-input-message::-moz-placeholder,
+  .chat-input-message:-ms-input-placeholder {
+    color: #9ca3af !important;
+    opacity: 1 !important;
+    -webkit-opacity: 1 !important;
+    -moz-opacity: 1 !important;
+  }
+}
+
+/* Forced regeneration - Thu Nov 13 18:22:20 CET 2025 */
