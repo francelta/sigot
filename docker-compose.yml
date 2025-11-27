@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # PostgreSQL + PostGIS
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_DB: sigot
+      POSTGRES_USER: sigot
+      POSTGRES_PASSWORD: sigot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sigot-network
+
+  # Redis for Django Channels
+  redis:
+    image: redis:7-alpine
+    networks:
+      - sigot-network
+
+  # Django Backend (Daphne ASGI)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgis://sigot:sigot@db:5432/sigot
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+    depends_on:
+      - db
+      - redis
+    networks:
+      - sigot-network
+    ports:
+      - "8000:8000"
+
+  # Vue Frontend (Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - PORT=80
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - sigot-network
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:
+
+networks:
+  sigot-network:
+    driver: bridge
+
