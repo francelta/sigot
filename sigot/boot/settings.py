@@ -17,11 +17,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-producti
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-
-# Wildcards para PaaS (Railway, Render)
-if not DEBUG:
-    ALLOWED_HOSTS += ['.railway.app', '.onrender.com']
+# ALLOWED_HOSTS - Siempre incluir wildcards para Railway/Render
+ALLOWED_HOSTS = ['*']  # Permitir todos los hosts (Railway maneja SSL/dominio)
 
 # Application definition
 INSTALLED_APPS = [
