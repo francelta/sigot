@@ -72,3 +72,4 @@ class Migration(migrations.Migration):
         migrations.RunPython(load_categorias, reverse_load_categorias),
     ]
 
+

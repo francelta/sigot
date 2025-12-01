@@ -108,6 +108,13 @@ const wizardData = ref({
       tonelaje: number | null
       caracteristicas: string | null
     }>,
+    maquinaria_vehicles: {} as Record<number, Array<{
+      nombre_vehiculo: string | null
+      marca: string | null
+      tonelaje: number | null
+      radio_km_especifico: number | null
+      caracteristicas: string | null
+    }>>,
   },
   step4: {
     foto_de_perfil: null as File | null,
@@ -137,8 +144,10 @@ const canProceed = computed(() => {
       const codigoPostalRegex = /^\d{5}$/
       return codigoPostalRegex.test(wizardData.value.step1.codigo_postal)
     case 2:
-      // Al menos una máquina seleccionada
-      return wizardData.value.step2.categoria_ids.length > 0
+      // Al menos un vehículo registrado
+      const vehicles = wizardData.value.step3.maquinaria_vehicles || {}
+      const totalVehicles = Object.values(vehicles).reduce((sum, arr) => sum + arr.length, 0)
+      return totalVehicles > 0
     case 3:
       // Al menos un radio definido (general o específico)
       const tieneRadioGeneral = wizardData.value.step3.radio_km_general !== null && wizardData.value.step3.radio_km_general > 0
@@ -183,20 +192,42 @@ async function handleFinish() {
 
   try {
     // Build payload according to WizardDataPayload v3.0 interface
+    // Flatten maquinaria_vehicles: create one entry per vehicle
+    const maquinaria: Array<{
+      categoria_id: number
+      radio_km_especifico: number | null
+      nombre_vehiculo: string | null
+      marca: string | null
+      tonelaje: number | null
+      caracteristicas: string | null
+      imagen: File | null
+    }> = []
+    
+    const vehicles = wizardData.value.step3.maquinaria_vehicles || {}
+    Object.keys(vehicles).forEach(categoriaIdStr => {
+      const categoriaId = Number(categoriaIdStr)
+      const categoryVehicles = vehicles[categoriaId] || []
+      
+      // Only one vehicle per category (take the first one)
+      if (categoryVehicles.length > 0) {
+        const vehicle = categoryVehicles[0]
+        const imagen = wizardData.value.step4.maquinaria_imagenes[categoriaId] || null
+        
+        maquinaria.push({
+          categoria_id: categoriaId,
+          radio_km_especifico: vehicle.radio_km_especifico || null,
+          nombre_vehiculo: vehicle.nombre_vehiculo || null,
+          marca: vehicle.marca || null,
+          tonelaje: vehicle.tonelaje || null,
+          caracteristicas: vehicle.caracteristicas || null,
+          imagen,
+        })
+      }
+    })
+
     const payload: WizardDataPayload = {
       codigo_postal: wizardData.value.step1.codigo_postal,
-      maquinaria: wizardData.value.step2.categoria_ids.map(categoriaId => {
-        const detalles = wizardData.value.step3.maquinaria_detalles[categoriaId] || {}
-        return {
-          categoria_id: categoriaId,
-          radio_km_especifico: wizardData.value.step3.maquinaria_radios[categoriaId] || null,
-          nombre_vehiculo: detalles.nombre_vehiculo || null,
-          marca: detalles.marca || null,
-          tonelaje: detalles.tonelaje || null,
-          caracteristicas: detalles.caracteristicas || null,
-          imagen: wizardData.value.step4.maquinaria_imagenes[categoriaId] || null,
-        }
-      }),
+      maquinaria,
       radio_km_general: wizardData.value.step3.radio_km_general,
       foto_de_perfil: wizardData.value.step4.foto_de_perfil || null,
     }
